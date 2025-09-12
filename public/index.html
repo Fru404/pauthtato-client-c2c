@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pauthtato C2C Demo (POST)</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        padding: 2rem;
+        background: #fafafa;
+      }
+      button {
+        padding: 0.8rem 1.2rem;
+        font-size: 1.2rem;
+        cursor: pointer;
+        background: #4caf50;
+        color: white;
+        border: none;
+        border-radius: 6px;
+      }
+      pre {
+        background: #f5f5f5;
+        padding: 1rem;
+        margin-top: 1rem;
+        border: 1px solid #ddd;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Pauthtato – Click to Create (POST)</h1>
+    <button id="createBtn">Create Account</button>
+    <pre id="output">Click the button to see generated JSON</pre>
+
+    <script>
+      document
+        .getElementById("createBtn")
+        .addEventListener("click", async () => {
+          // Automatically capture the current website's host name
+          const host = window.location.hostname;
+
+          // Build the POST body
+          const payload = {
+            service: host,
+            // later you can add optional fields here (e.g. userHandle, publicKey)
+          };
+
+          try {
+            const res = await fetch("/create-account", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            });
+            const json = await res.json();
+            document.getElementById("output").textContent = JSON.stringify(
+              json,
+              null,
+              2
+            );
+          } catch (err) {
+            document.getElementById("output").textContent =
+              "Error: " + err.message;
+          }
+        });
+    </script>
+  </body>
+</html>
