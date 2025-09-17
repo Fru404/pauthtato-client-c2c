@@ -19,10 +19,10 @@ const creds = JSON.parse(fs.readFileSync("./credentials.json", "utf8"));
 
 // ---- Google Sheets setup ----
 const doc = new GoogleSpreadsheet(process.env.SHEET_ID);
-await doc.useServiceAccountAuth({
-  client_email: creds.client_email,
-  private_key: creds.private_key,
-});
+
+// Authenticate using the service account
+await doc.useServiceAccountAuth(creds);
+
 await doc.loadInfo();
 const sheet = doc.sheetsByIndex[0];
 
