@@ -3,27 +3,34 @@ import cors from "cors";
 import crypto from "crypto";
 import { v4 as uuidv4 } from "uuid";
 import { GoogleSpreadsheet } from "google-spreadsheet";
+import fs from "fs";
 import dotenv from "dotenv";
 
 dotenv.config();
+
 const app = express();
 app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 5000;
 
-const doc = new GoogleSpreadsheet(process.env.SHEET_ID, {
-  auth: {
-    client_email: process.env.GOOGLE_SERVICE_EMAIL,
-    private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n"),
-  },
+// ---- Load credentials.json ----
+const creds = JSON.parse(fs.readFileSync("./credentials.json", "utf8"));
+
+// ---- Google Sheets setup ----
+const doc = new GoogleSpreadsheet(process.env.SHEET_ID);
+await doc.useServiceAccountAuth({
+  client_email: creds.client_email,
+  private_key: creds.private_key,
 });
 await doc.loadInfo();
 const sheet = doc.sheetsByIndex[0];
 
+// ---- API route ----
 app.post("/register", async (req, res) => {
   try {
     const { apiKey, serviceName } = req.body;
+
     if (apiKey !== process.env.MASTER_API_KEY) {
       return res.status(401).json({ error: "Invalid API key" });
     }
@@ -31,13 +38,13 @@ app.post("/register", async (req, res) => {
       return res.status(400).json({ error: "Missing serviceName" });
     }
 
-    const userID = `pauthtato-${crypto.randomBytes(3).toString("hex")}`;
-    const bundleID = crypto.randomBytes(3).toString("hex");
+    const userID    = `pauthtato-${crypto.randomBytes(3).toString("hex")}`;
+    const bundleID  = crypto.randomBytes(3).toString("hex");
     const serviceID = `${serviceName}-bundle-${bundleID}`;
-    const ObkupID = crypto.randomBytes(32).toString("hex");
+    const ObkupID   = crypto.randomBytes(32).toString("hex");
     const publicKey = crypto.randomBytes(32).toString("hex");
     const timestamp = Date.now();
-    const uuid = uuidv4();
+    const uuid      = uuidv4();
 
     await sheet.addRow({
       servicename: serviceName,
