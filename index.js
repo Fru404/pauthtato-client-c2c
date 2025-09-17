@@ -8,7 +8,7 @@ dotenv.config();
 const app = express();
 app.use(express.json());
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 5000;
 
 // Google Sheets setup
 const doc = new GoogleSpreadsheet(process.env.SHEET_ID);
