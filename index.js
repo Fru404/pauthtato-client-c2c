@@ -109,7 +109,13 @@ app.post("/register", async (req, res) => {
     const block = {
       index,
       previous_hash,
-      data: blockData,
+      user_id: userID,
+      service_name: serviceName,
+      service_id: serviceID,
+      uuid,
+      public_key: publicKey,
+      obkup_id: ObkupID,
+      timestamp,
       timestamp,
       hash,
     };
