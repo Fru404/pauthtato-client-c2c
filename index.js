@@ -54,7 +54,7 @@ app.post("/register", async (req, res) => {
     const uuid = uuidv4();
 
     // Insert into Supabase table "services"
-    const { error } = await supabase.from("services").insert([
+    const { error } = await supabase.from("pauthato-c2c").insert([
       { 
         user_id: userID,
         service_name: serviceName,
