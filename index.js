@@ -81,7 +81,7 @@ app.post("/register", async (req, res) => {
 
     // Get last block hash/index
     const { data: lastBlock, error: fetchErr } = await supabase
-      .from("pauthtato-chain")
+      .from("pauthtato-block")
       .select("index, hash")
       .order("index", { ascending: false })
       .limit(1);
