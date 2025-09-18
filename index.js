@@ -1,3 +1,4 @@
+// server.js
 import express from "express";
 import cors from "cors";
 import crypto from "crypto";
@@ -5,6 +6,7 @@ import { v4 as uuidv4 } from "uuid";
 import session from "express-session";
 import bodyParser from "body-parser";
 import dotenv from "dotenv";
+import cookieParser from "cookie-parser";
 import { createClient } from "@supabase/supabase-js";
 
 dotenv.config();
@@ -17,19 +19,26 @@ const supabase = createClient(
   process.env.SUPABASE_KEY
 );
 
-app.use(cors());
+app.use(
+  cors({
+    origin: true,          // adjust to your front-end origin if needed
+    credentials: true,     // allow cookies to be sent
+  })
+);
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+app.use(cookieParser());
 
-const secretKey = crypto.randomBytes(32).toString("hex");
+// Optional session usage if needed elsewhere
 app.use(
   session({
-    secret: secretKey,
+    secret: crypto.randomBytes(32).toString("hex"),
     resave: false,
     saveUninitialized: false,
   })
 );
 
+// ---------- Register Route ----------
 app.post("/register", async (req, res) => {
   try {
     const { apiKey, serviceName } = req.body;
@@ -41,6 +50,7 @@ app.post("/register", async (req, res) => {
       return res.status(400).json({ error: "Missing serviceName" });
     }
 
+    // Generate IDs
     const userID = `pauthtato-${crypto.randomBytes(3).toString("hex")}`;
     const bundleID = crypto.randomBytes(3).toString("hex");
     const serviceID = `${serviceName}-bundle-${bundleID}`;
@@ -49,7 +59,7 @@ app.post("/register", async (req, res) => {
     const timestamp = Date.now();
     const uuid = uuidv4();
 
-    // --- Insert into pauthtato-client-c2c (original record) ---
+    // Insert into pauthtato-client-c2c
     const { error: insertError } = await supabase
       .from("pauthtato-client-c2c")
       .insert([
@@ -69,9 +79,9 @@ app.post("/register", async (req, res) => {
       return res.status(500).json({ error: "Failed to register user" });
     }
 
-    // --- Determine previous hash and next block index ---
+    // Get last block hash/index
     const { data: lastBlock, error: fetchErr } = await supabase
-      .from("pauthtato-block")
+      .from("pauthtato-chain")
       .select("index, hash")
       .order("index", { ascending: false })
       .limit(1);
@@ -86,7 +96,7 @@ app.post("/register", async (req, res) => {
     const previous_hash =
       prevIndex === -1 ? "0".repeat(64) : lastBlock[0].hash;
 
-    // --- Data payload of this block ---
+    // Block data payload
     const blockData = {
       user_id: userID,
       service_name: serviceName,
@@ -97,7 +107,7 @@ app.post("/register", async (req, res) => {
       timestamp,
     };
 
-    // --- Create the block object and calculate its hash ---
+    // Calculate block hash
     const blockString = JSON.stringify({
       index,
       previous_hash,
@@ -116,27 +126,54 @@ app.post("/register", async (req, res) => {
       public_key: publicKey,
       obkup_id: ObkupID,
       timestamp,
-      timestamp,
       hash,
     };
 
-    // --- Insert the block into pauthtato-chain ---
+    // Insert into pauthtato-block
     const { error: blockError } = await supabase
       .from("pauthtato-block")
       .insert([block]);
 
     if (blockError) {
       console.error(blockError);
-      return res.status(500).json({ error: "Failed to insert block to table:pauthtato-block" });
+      return res
+        .status(500)
+        .json({ error: "Failed to insert block to table:pauthtato-block" });
     }
 
-    res.json({ ...block });
+    // Store block in a secure, long-lived cookie
+    res.cookie("pauthtato_block", JSON.stringify(block), {
+      httpOnly: true,
+      secure: true, // set to true in production with HTTPS
+      sameSite: "lax",
+      maxAge: 1000 * 60 * 60 * 24 * 365, // 1 year
+    });
+
+    res.json({ message: "Registration successful", block });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to register user" });
   }
 });
 
+// ---------- Sign-In Route ----------
+app.post("/signin", (req, res) => {
+  const cookieData = req.cookies.pauthtato_block;
+  if (!cookieData) {
+    return res.status(401).json({ error: "No cookie found, please register" });
+  }
+
+  try {
+    const block = JSON.parse(cookieData);
+    // Optionally verify hash or cross-check with DB
+    res.json({ message: "Login successful via cookie", block });
+  } catch (err) {
+    console.error(err);
+    res.status(400).json({ error: "Invalid cookie data" });
+  }
+});
+
+// ---------- Start Server ----------
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
