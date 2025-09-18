@@ -71,7 +71,7 @@ app.post("/register", async (req, res) => {
 
     // --- Determine previous hash and next block index ---
     const { data: lastBlock, error: fetchErr } = await supabase
-      .from("pauthtato-chain")
+      .from("pauthtato-block")
       .select("index, hash")
       .order("index", { ascending: false })
       .limit(1);
