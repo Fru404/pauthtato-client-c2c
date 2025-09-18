@@ -121,13 +121,13 @@ app.post("/register", async (req, res) => {
     };
 
     // --- Insert the block into pauthtato-chain ---
-    const { error: chainError } = await supabase
-      .from("pauthtato-chain")
+    const { error: blockError } = await supabase
+      .from("pauthtato-block")
       .insert([block]);
 
-    if (chainError) {
-      console.error(chainError);
-      return res.status(500).json({ error: "Failed to insert blockchain block" });
+    if (blockError) {
+      console.error(blockError);
+      return res.status(500).json({ error: "Failed to insert block to table:pauthtato-block" });
     }
 
     res.json({ ...block });
