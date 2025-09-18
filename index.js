@@ -12,7 +12,6 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Supabase client
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_KEY
@@ -22,7 +21,6 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Session setup
 const secretKey = crypto.randomBytes(32).toString("hex");
 app.use(
   session({
@@ -32,7 +30,6 @@ app.use(
   })
 );
 
-// ---- API route ----
 app.post("/register", async (req, res) => {
   try {
     const { apiKey, serviceName } = req.body;
@@ -40,7 +37,6 @@ app.post("/register", async (req, res) => {
     if (apiKey !== process.env.MASTER_API_KEY) {
       return res.status(401).json({ error: "Invalid API key" });
     }
-
     if (!serviceName) {
       return res.status(400).json({ error: "Missing serviceName" });
     }
@@ -53,7 +49,7 @@ app.post("/register", async (req, res) => {
     const timestamp = Date.now();
     const uuid = uuidv4();
 
-    // 1️⃣ Insert into pauthtato-client-c2c
+    // --- Insert into pauthtato-client-c2c (original record) ---
     const { error: insertError } = await supabase
       .from("pauthtato-client-c2c")
       .insert([
@@ -73,41 +69,62 @@ app.post("/register", async (req, res) => {
       return res.status(500).json({ error: "Failed to register user" });
     }
 
-    // 2️⃣ Create a hash of the record for the blockchain table
-    const hashPayload = `${userID}${serviceName}${serviceID}${uuid}${publicKey}${ObkupID}${timestamp}`;
-    const hash = crypto.createHash("sha256").update(hashPayload).digest("hex");
+    // --- Determine previous hash and next block index ---
+    const { data: lastBlock, error: fetchErr } = await supabase
+      .from("pauthtato-chain")
+      .select("index, hash")
+      .order("index", { ascending: false })
+      .limit(1);
 
-    // 3️⃣ Insert duplicate block into pauthtato-chain with the hash
+    if (fetchErr) {
+      console.error(fetchErr);
+      return res.status(500).json({ error: "Failed to fetch previous block" });
+    }
+
+    const prevIndex = lastBlock && lastBlock.length > 0 ? lastBlock[0].index : -1;
+    const index = prevIndex + 1;
+    const previous_hash =
+      prevIndex === -1 ? "0".repeat(64) : lastBlock[0].hash;
+
+    // --- Data payload of this block ---
+    const blockData = {
+      user_id: userID,
+      service_name: serviceName,
+      service_id: serviceID,
+      uuid,
+      public_key: publicKey,
+      obkup_id: ObkupID,
+      timestamp,
+    };
+
+    // --- Create the block object and calculate its hash ---
+    const blockString = JSON.stringify({
+      index,
+      previous_hash,
+      data: blockData,
+      timestamp,
+    });
+    const hash = crypto.createHash("sha256").update(blockString).digest("hex");
+
+    const block = {
+      index,
+      previous_hash,
+      data: blockData,
+      timestamp,
+      hash,
+    };
+
+    // --- Insert the block into pauthtato-chain ---
     const { error: chainError } = await supabase
       .from("pauthtato-chain")
-      .insert([
-        {
-          user_id: userID,
-          service_name: serviceName,
-          service_id: serviceID,
-          uuid,
-          public_key: publicKey,
-          obkup_id: ObkupID,
-          timestamp,
-          hash, // extra column
-        },
-      ]);
+      .insert([block]);
 
     if (chainError) {
       console.error(chainError);
-      return res.status(500).json({ error: "Failed to insert blockchain record" });
+      return res.status(500).json({ error: "Failed to insert blockchain block" });
     }
 
-    res.json({
-      serviceName,
-      userID,
-      serviceID,
-      uuid,
-      publicKey,
-      ObkupID,
-      timestamp,
-      hash,
-    });
+    res.json({ ...block });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to register user" });
