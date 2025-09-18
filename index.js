@@ -53,25 +53,61 @@ app.post("/register", async (req, res) => {
     const timestamp = Date.now();
     const uuid = uuidv4();
 
-    // Insert into Supabase table "services"
-    const { error } = await supabase.from("pauthtato-c2c").insert([
-      { 
-        user_id: userID,
-        service_name: serviceName,
-        service_id: serviceID,
-        uuid,
-        public_key: publicKey,
-        obkup_id: ObkupID,
-        timestamp,
-      },
-    ]);
+    // 1️⃣ Insert into pauthtato-client-c2c
+    const { error: insertError } = await supabase
+      .from("pauthtato-client-c2c")
+      .insert([
+        {
+          user_id: userID,
+          service_name: serviceName,
+          service_id: serviceID,
+          uuid,
+          public_key: publicKey,
+          obkup_id: ObkupID,
+          timestamp,
+        },
+      ]);
 
-    if (error) {
-      console.error(error);
+    if (insertError) {
+      console.error(insertError);
       return res.status(500).json({ error: "Failed to register user" });
     }
 
-    res.json({ serviceName, userID, serviceID, uuid, publicKey, ObkupID, timestamp });
+    // 2️⃣ Create a hash of the record for the blockchain table
+    const hashPayload = `${userID}${serviceName}${serviceID}${uuid}${publicKey}${ObkupID}${timestamp}`;
+    const hash = crypto.createHash("sha256").update(hashPayload).digest("hex");
+
+    // 3️⃣ Insert duplicate block into pauthtato-chain with the hash
+    const { error: chainError } = await supabase
+      .from("pauthtato-chain")
+      .insert([
+        {
+          user_id: userID,
+          service_name: serviceName,
+          service_id: serviceID,
+          uuid,
+          public_key: publicKey,
+          obkup_id: ObkupID,
+          timestamp,
+          hash, // extra column
+        },
+      ]);
+
+    if (chainError) {
+      console.error(chainError);
+      return res.status(500).json({ error: "Failed to insert blockchain record" });
+    }
+
+    res.json({
+      serviceName,
+      userID,
+      serviceID,
+      uuid,
+      publicKey,
+      ObkupID,
+      timestamp,
+      hash,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to register user" });
